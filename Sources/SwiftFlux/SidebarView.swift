@@ -9,105 +9,119 @@ struct SidebarView: View {
     var body: some View {
         List(selection: sidebarSelection()) {
             Section("Filters") {
-                ForEach(MainViewModel.EntryFilter.allCases) { filter in
-                    HStack {
-                        Image(systemName: filterIcon(for: filter))
-                        Text(filter.rawValue)
-                        Spacer()
-                        if filter == .unread {
-                            let total = viewModel.categories.first(where: { $0.id == 0 })?.totalUnread ?? viewModel.unreadCounts.values.reduce(0, +)
-                            if total > 0 {
-                                Text("\(total)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .tag(SidebarItem.filter(filter))
-                }
+                filterRows
             }
 
             Section("Categories") {
-                ForEach(viewModel.categories) { category in
-                    HStack {
-                        Image(systemName: "folder")
-                        Text(category.title)
-                        Spacer()
-                        if let count = category.totalUnread, count > 0 {
-                            Text("\(count)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tag(SidebarItem.category(category))
-                }
+                categoryRows
             }
 
-            Section("Feeds") {
-                ForEach(viewModel.displayedFeeds) { feed in
-                    HStack {
-                        if let iconId = feed.icon?.iconId {
-                            FeedIconView(iconId: iconId, feedId: feed.id)
-                                .frame(width: 20, height: 20)
-                        } else {
-                            Image(systemName: "rss")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Text(feed.title)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        if let count = viewModel.unreadCounts[feed.id], count > 0 {
-                            Text("\(count)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tag(SidebarItem.feed(feed))
-                }
+            Section {
+                feedRows
+            } header: {
+                FeedsSectionHeader(showOnlyUnread: $viewModel.showOnlyUnreadFeeds)
             }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(Color.black)
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 0) {
-                Divider()
-                HStack(spacing: 8) {
-                    Button(action: {
-                        Task {
-                            isRefreshing = true
-                            await viewModel.refreshFeeds()
-                            isRefreshing = false
-                        }
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                            .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
-                    }
-                    .help("Refresh all feeds")
-
-                    Button(action: { showingAddFeed = true }) {
-                        Image(systemName: "plus")
-                    }
-                    .help("Add new feed")
-
-                    Spacer()
-
-                    Toggle("", isOn: $viewModel.showOnlyUnreadFeeds)
-                        .toggleStyle(.switch)
-                        .help("Show only feeds with unread items")
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-            }
-            .background(Color.black)
+            bottomBar
         }
         .sheet(isPresented: $showingAddFeed) {
             AddFeedView(viewModel: viewModel)
         }
+    }
+
+    private var filterRows: some View {
+        ForEach(MainViewModel.EntryFilter.allCases) { filter in
+            HStack {
+                Image(systemName: filterIcon(for: filter))
+                Text(filter.rawValue)
+                Spacer()
+                if filter == .unread {
+                    let total = viewModel.categories.first(where: { $0.id == 0 })?.totalUnread ?? viewModel.unreadCounts.values.reduce(0, +)
+                    if total > 0 {
+                        Text("\(total)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .tag(SidebarItem.filter(filter))
+        }
+    }
+
+    private var categoryRows: some View {
+        ForEach(viewModel.categories) { category in
+            HStack {
+                Image(systemName: "folder")
+                Text(category.title)
+                Spacer()
+                if let count = category.totalUnread, count > 0 {
+                    Text("\(count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tag(SidebarItem.category(category))
+        }
+    }
+
+    private var feedRows: some View {
+        ForEach(viewModel.displayedFeeds) { feed in
+            HStack {
+                if let iconId = feed.icon?.iconId {
+                    FeedIconView(iconId: iconId, feedId: feed.id)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "rss")
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(feed.title)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if let count = viewModel.unreadCounts[feed.id], count > 0 {
+                    Text("\(count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tag(SidebarItem.feed(feed))
+        }
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 8) {
+                Button(action: {
+                    Task {
+                        isRefreshing = true
+                        await viewModel.refreshFeeds()
+                        isRefreshing = false
+                    }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                        .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                }
+                .help("Refresh all feeds")
+
+                Button(action: { showingAddFeed = true }) {
+                    Image(systemName: "plus")
+                }
+                .help("Add new feed")
+
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+        .background(Color.black)
     }
 
     private func sidebarSelection() -> Binding<SidebarItem?> {
@@ -150,6 +164,26 @@ struct SidebarView: View {
         case .read: return "envelope.open"
         case .starred: return "star.fill"
         case .all: return "tray.full"
+        }
+    }
+}
+
+struct FeedsSectionHeader: View {
+    @Binding var showOnlyUnread: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("Feeds")
+            Spacer()
+            Button(action: {
+                showOnlyUnread.toggle()
+            }) {
+                Image(systemName: showOnlyUnread ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(showOnlyUnread ? Color.accentColor : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(showOnlyUnread ? "Showing only feeds with unread items" : "Showing all feeds")
         }
     }
 }
