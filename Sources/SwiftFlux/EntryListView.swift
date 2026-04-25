@@ -99,6 +99,13 @@ struct EntryListView: View {
                 await viewModel.loadEntries()
             }
         }
+        .onChange(of: viewModel.selectedEntry) { oldValue, _ in
+            if oldValue != nil {
+                Task {
+                    await viewModel.loadEntries()
+                }
+            }
+        }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {

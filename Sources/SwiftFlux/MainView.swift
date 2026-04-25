@@ -36,13 +36,55 @@ class MainViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var unreadCounts: [Int: Int] = [:]
-    @Published var showOnlyUnreadFeeds: Bool = false
+    @Published var showOnlyUnreadFeeds: Bool = true
 
     var displayedFeeds: [Feed] {
         if showOnlyUnreadFeeds {
             return feeds.filter { unreadCounts[$0.id, default: 0] > 0 }
         }
         return feeds
+    }
+
+    /// Sidebar rows interleaving categories and their feeds for grouped display.
+    var sidebarRows: [SidebarItem] {
+        let grouped = Dictionary(grouping: displayedFeeds, by: { $0.category })
+        var rows: [SidebarItem] = []
+
+        let sortedKeys = grouped.keys.sorted { a, b in
+            switch (a, b) {
+            case (nil, _): return false
+            case (_, nil): return true
+            default: return a!.title.lowercased() < b!.title.lowercased()
+            }
+        }
+
+        for category in sortedKeys {
+            let catFeeds = grouped[category]!.sorted { $0.title.lowercased() < $1.title.lowercased() }
+
+            if showOnlyUnreadFeeds && catFeeds.allSatisfy({ unreadCounts[$0.id, default: 0] == 0 }) {
+                continue
+            }
+
+            if let cat = category {
+                rows.append(.category(cat))
+            } else {
+                rows.append(.category(Category(
+                    id: -1,
+                    userId: 0,
+                    title: "Uncategorized",
+                    hideGlobally: false,
+                    feedCount: catFeeds.count,
+                    totalUnread: catFeeds.reduce(0) { $0 + unreadCounts[$1.id, default: 0] }
+                )))
+            }
+
+            for feed in catFeeds {
+                if showOnlyUnreadFeeds && unreadCounts[feed.id, default: 0] == 0 { continue }
+                rows.append(.feed(feed))
+            }
+        }
+
+        return rows
     }
 
     private var client: MinifluxClient?
@@ -79,10 +121,15 @@ class MainViewModel: ObservableObject {
     }
 
     func refreshData() async {
-        guard let client = client else { return }
         isLoading = true
         defer { isLoading = false }
 
+        await refreshSidebarData()
+        await loadEntries()
+    }
+
+    private func refreshSidebarData() async {
+        guard let client = client else { return }
         do {
             async let feedsTask = client.getFeeds()
             async let categoriesTask = client.getCategories()
@@ -100,10 +147,8 @@ class MainViewModel: ObservableObject {
                 }
             }
             self.unreadCounts = counts
-
-            await loadEntries()
         } catch {
-            errorMessage = "Failed to load data: \(error.localizedDescription)"
+            errorMessage = "Failed to refresh sidebar: \(error.localizedDescription)"
         }
     }
 
@@ -143,14 +188,18 @@ class MainViewModel: ObservableObject {
         }
     }
 
-    func markAsRead(_ entry: Entry) async {
+    func markAsRead(_ entry: Entry, reloadEntries: Bool = true) async {
         guard let client = client else { return }
         do {
             try await client.updateEntries(ids: [entry.id], status: "read")
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries[index] = try await client.getEntry(id: entry.id)
             }
-            await refreshData()
+            if reloadEntries {
+                await refreshData()
+            } else {
+                await refreshSidebarData()
+            }
         } catch {
             errorMessage = "Failed to mark as read: \(error.localizedDescription)"
         }

@@ -12,14 +12,10 @@ struct SidebarView: View {
                 filterRows
             }
 
-            Section("Categories") {
-                categoryRows
-            }
-
-            Section {
-                feedRows
-            } header: {
-                FeedsSectionHeader(showOnlyUnread: $viewModel.showOnlyUnreadFeeds)
+            Section("Feeds") {
+                ForEach(viewModel.sidebarRows, id: \.self) { item in
+                    sidebarRow(for: item)
+                }
             }
         }
         .listStyle(.sidebar)
@@ -52,8 +48,10 @@ struct SidebarView: View {
         }
     }
 
-    private var categoryRows: some View {
-        ForEach(viewModel.categories) { category in
+    @ViewBuilder
+    private func sidebarRow(for item: SidebarItem) -> some View {
+        switch item {
+        case .category(let category):
             HStack {
                 Image(systemName: "folder")
                 Text(category.title)
@@ -64,13 +62,15 @@ struct SidebarView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .tag(SidebarItem.category(category))
-        }
-    }
+            .font(.system(size: 13, weight: .semibold))
+            .tag(item)
 
-    private var feedRows: some View {
-        ForEach(viewModel.displayedFeeds) { feed in
+        case .feed(let feed):
             HStack {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 16)
+
                 if let iconId = feed.icon?.iconId {
                     FeedIconView(iconId: iconId, feedId: feed.id)
                         .frame(width: 20, height: 20)
@@ -90,7 +90,11 @@ struct SidebarView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .tag(SidebarItem.feed(feed))
+            .font(.system(size: 12))
+            .tag(item)
+
+        case .filter:
+            EmptyView()
         }
     }
 
@@ -117,6 +121,15 @@ struct SidebarView: View {
                 .help("Add new feed")
 
                 Spacer()
+
+                Button(action: {
+                    viewModel.showOnlyUnreadFeeds.toggle()
+                }) {
+                    Image(systemName: viewModel.showOnlyUnreadFeeds ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .foregroundStyle(viewModel.showOnlyUnreadFeeds ? Color.accentColor : .secondary)
+                }
+                .help(viewModel.showOnlyUnreadFeeds ? "Showing only feeds with unread items" : "Showing all feeds")
+                .buttonStyle(.borderless)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -164,26 +177,6 @@ struct SidebarView: View {
         case .read: return "envelope.open"
         case .starred: return "star.fill"
         case .all: return "tray.full"
-        }
-    }
-}
-
-struct FeedsSectionHeader: View {
-    @Binding var showOnlyUnread: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text("Feeds")
-            Spacer()
-            Button(action: {
-                showOnlyUnread.toggle()
-            }) {
-                Image(systemName: showOnlyUnread ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(showOnlyUnread ? Color.accentColor : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(showOnlyUnread ? "Showing only feeds with unread items" : "Showing all feeds")
         }
     }
 }

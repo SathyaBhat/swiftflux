@@ -1,8 +1,13 @@
 import SwiftUI
+import AppKit
 
 @main
 struct SwiftFluxApp: App {
     @StateObject private var appState = AppState()
+
+    init() {
+        NSApplication.shared.applicationIconImage = NSImage(named: "AppIcon")
+    }
 
     var body: some Scene {
         WindowGroup {

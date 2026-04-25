@@ -102,10 +102,11 @@ struct EntryContentView: View {
         let styled = styleHTML(baseHTML)
         self.htmlContent = styled
 
-        // Auto-mark as read when opened
+        // Auto-mark as read when opened, but keep the entry in the list
+        // until another article is selected.
         if entry.isUnread {
             Task {
-                await viewModel.markAsRead(entry)
+                await viewModel.markAsRead(entry, reloadEntries: false)
             }
         }
     }
