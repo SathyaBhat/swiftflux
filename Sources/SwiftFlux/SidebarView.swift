@@ -61,9 +61,15 @@ struct SidebarView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                Image(systemName: viewModel.collapsedCategories.contains(category.id) ? "chevron.right" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             .font(.system(size: 13, weight: .semibold))
             .tag(item)
+            .onTapGesture(count: 2) {
+                viewModel.toggleCategory(category.id)
+            }
 
         case .feed(let feed):
             HStack {

@@ -37,6 +37,7 @@ class MainViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var unreadCounts: [Int: Int] = [:]
     @Published var showOnlyUnreadFeeds: Bool = true
+    @Published var collapsedCategories: Set<Int> = []
 
     var displayedFeeds: [Feed] {
         if showOnlyUnreadFeeds {
@@ -65,22 +66,21 @@ class MainViewModel: ObservableObject {
                 continue
             }
 
-            if let cat = category {
-                rows.append(.category(cat))
-            } else {
-                rows.append(.category(Category(
-                    id: -1,
-                    userId: 0,
-                    title: "Uncategorized",
-                    hideGlobally: false,
-                    feedCount: catFeeds.count,
-                    totalUnread: catFeeds.reduce(0) { $0 + unreadCounts[$1.id, default: 0] }
-                )))
-            }
+            let cat = category ?? Category(
+                id: -1,
+                userId: 0,
+                title: "Uncategorized",
+                hideGlobally: false,
+                feedCount: catFeeds.count,
+                totalUnread: catFeeds.reduce(0) { $0 + unreadCounts[$1.id, default: 0] }
+            )
+            rows.append(.category(cat))
 
-            for feed in catFeeds {
-                if showOnlyUnreadFeeds && unreadCounts[feed.id, default: 0] == 0 { continue }
-                rows.append(.feed(feed))
+            if !collapsedCategories.contains(cat.id) {
+                for feed in catFeeds {
+                    if showOnlyUnreadFeeds && unreadCounts[feed.id, default: 0] == 0 { continue }
+                    rows.append(.feed(feed))
+                }
             }
         }
 
@@ -244,6 +244,14 @@ class MainViewModel: ObservableObject {
             }
         } catch {
             errorMessage = "Failed to mark all as read: \(error.localizedDescription)"
+        }
+    }
+
+    func toggleCategory(_ id: Int) {
+        if collapsedCategories.contains(id) {
+            collapsedCategories.remove(id)
+        } else {
+            collapsedCategories.insert(id)
         }
     }
 

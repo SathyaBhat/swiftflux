@@ -27,9 +27,19 @@ struct EntryContentView: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.title)
-                        .font(.headline)
-                        .textSelection(.enabled)
+                    Button(action: {
+                        if let url = URL(string: entry.url) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }) {
+                        Text(entry.title)
+                            .font(.headline)
+                            .textSelection(.enabled)
+                            .foregroundStyle(.blue)
+                            .underline()
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open in browser")
 
                     HStack(spacing: 6) {
                         if let feed = entry.feed {
