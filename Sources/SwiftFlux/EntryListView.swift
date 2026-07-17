@@ -4,12 +4,26 @@ struct EntryListView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var isMarkingAllRead = false
     @State private var searchText = ""
+    @State private var selectedAuthor: String? = nil
+
+    var availableAuthors: [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for entry in viewModel.entries {
+            guard let author = entry.author, !author.isEmpty else { continue }
+            counts[author, default: 0] += 1
+        }
+        return counts.map { (name: $0.key, count: $0.value) }.sorted { $0.name < $1.name }
+    }
 
     var filteredEntries: [Entry] {
-        if searchText.isEmpty {
-            return viewModel.entries
+        var entries = viewModel.entries
+        if let author = selectedAuthor {
+            entries = entries.filter { $0.author == author }
         }
-        return viewModel.entries.filter {
+        if searchText.isEmpty {
+            return entries
+        }
+        return entries.filter {
             $0.title.localizedCaseInsensitiveContains(searchText) ||
             ($0.content ?? "").localizedCaseInsensitiveContains(searchText) ||
             ($0.feed?.title ?? "").localizedCaseInsensitiveContains(searchText)
@@ -29,10 +43,32 @@ struct EntryListView: View {
 
                 Spacer()
 
+                if !availableAuthors.isEmpty {
+                    Menu {
+                        Button("All Authors") { selectedAuthor = nil }
+                        Divider()
+                        ForEach(availableAuthors, id: \.name) { author in
+                            Button(action: { selectedAuthor = author.name }) {
+                                HStack {
+                                    Text("\(author.name) (\(author.count))")
+                                    if selectedAuthor == author.name {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: selectedAuthor != nil ? "person.fill" : "person")
+                    }
+                    .help(selectedAuthor.map { "Filtering by \($0)" } ?? "Filter by author")
+                }
+
                 Button(action: {
+                    let entriesToMark = filteredEntries
                     Task {
                         isMarkingAllRead = true
-                        await viewModel.markAllAsRead()
+                        await viewModel.markAllAsRead(from: entriesToMark)
                         isMarkingAllRead = false
                     }
                 }) {
@@ -43,8 +79,8 @@ struct EntryListView: View {
                         Image(systemName: "envelope.open")
                     }
                 }
-                .help("Mark all as read")
-                .disabled(viewModel.entries.filter(\.isUnread).isEmpty || isMarkingAllRead)
+                .help(selectedAuthor != nil ? "Mark all as read for \(selectedAuthor!)" : "Mark all as read")
+                .disabled(filteredEntries.filter(\.isUnread).isEmpty || isMarkingAllRead)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -83,7 +119,7 @@ struct EntryListView: View {
             } else {
                 List(selection: $viewModel.selectedEntry) {
                     ForEach(filteredEntries) { entry in
-                        EntryRow(entry: entry, viewModel: viewModel)
+                        EntryRow(entry: entry, visibleEntries: filteredEntries, viewModel: viewModel)
                             .tag(entry)
                             .listRowBackground(Color.black)
                     }
@@ -95,8 +131,14 @@ struct EntryListView: View {
         }
         .background(Color.black)
         .onChange(of: viewModel.selectedFilter) { _, _ in
+            selectedAuthor = nil
             Task {
                 await viewModel.loadEntries()
+            }
+        }
+        .onChange(of: viewModel.entries) { _, _ in
+            if let author = selectedAuthor, !availableAuthors.contains(where: { $0.name == author }) {
+                selectedAuthor = nil
             }
         }
         .onChange(of: viewModel.selectedEntry) { oldValue, _ in
@@ -118,6 +160,7 @@ struct EntryListView: View {
 
 struct EntryRow: View {
     let entry: Entry
+    let visibleEntries: [Entry]
     @ObservedObject var viewModel: MainViewModel
     @State private var isHovering = false
 
@@ -158,16 +201,31 @@ struct EntryRow: View {
 
             Spacer()
 
-            if entry.starred {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.caption)
-            }
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack(spacing: 4) {
+                    if entry.starred {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                            .font(.caption)
+                    }
+                    if entry.isUnread {
+                        Circle()
+                            .fill(.blue)
+                            .frame(width: 8, height: 8)
+                    }
+                }
 
-            if entry.isUnread {
-                Circle()
-                    .fill(.blue)
-                    .frame(width: 8, height: 8)
+                if let author = entry.author, !author.isEmpty {
+                    HStack(spacing: 3) {
+                        Image(systemName: "person")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                        Text(author)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
             }
         }
         .padding(.vertical, 4)
@@ -186,7 +244,7 @@ struct EntryRow: View {
             }
             Divider()
             Button("Mark All as Read") {
-                Task { await viewModel.markAllAsRead() }
+                Task { await viewModel.markAllAsRead(from: visibleEntries) }
             }
         }
     }

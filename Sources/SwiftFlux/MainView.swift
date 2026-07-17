@@ -234,10 +234,10 @@ class MainViewModel: ObservableObject {
         }
     }
 
-    func markAllAsRead() async {
+    func markAllAsRead(from pool: [Entry]) async {
         guard let client = client else { return }
         do {
-            let ids = entries.filter { $0.isUnread }.map { $0.id }
+            let ids = pool.filter { $0.isUnread }.map { $0.id }
             if !ids.isEmpty {
                 try await client.updateEntries(ids: ids, status: "read")
                 await refreshData()
