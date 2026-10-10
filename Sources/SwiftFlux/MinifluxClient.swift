@@ -207,9 +207,11 @@ class MinifluxClient: ObservableObject {
     }
 
     func fetchOriginalContent(entryId: Int) async throws -> String {
-        let (data, _) = try await makeRequest(path: "/entries/\(entryId)/fetch-content?update_content=true")
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: String]
-        return json?["content"] ?? ""
+        // Don't pass update_content=true: that overwrites the stored feed content
+        // on the server with the scraped page.
+        let (data, _) = try await makeRequest(path: "/entries/\(entryId)/fetch-content")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["content"] as? String ?? ""
     }
 
     // MARK: - Icons

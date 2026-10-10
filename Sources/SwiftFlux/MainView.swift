@@ -88,6 +88,7 @@ class MainViewModel: ObservableObject {
     }
 
     private var client: MinifluxClient?
+    private var fullContentCache: [Int: String] = [:]
 
     enum EntryFilter: String, CaseIterable, Identifiable {
         case unread = "Unread"
@@ -192,9 +193,7 @@ class MainViewModel: ObservableObject {
         guard let client = client else { return }
         do {
             try await client.updateEntries(ids: [entry.id], status: "read")
-            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-                entries[index] = try await client.getEntry(id: entry.id)
-            }
+            replaceEntry(try await client.getEntry(id: entry.id))
             if reloadEntries {
                 await refreshData()
             } else {
@@ -205,14 +204,43 @@ class MainViewModel: ObservableObject {
         }
     }
 
-    func markAsUnread(_ entry: Entry) async {
+    /// Swaps in a refreshed copy of an entry, keeping the list and the
+    /// detail view's selection in sync.
+    private func replaceEntry(_ updated: Entry) {
+        if let index = entries.firstIndex(where: { $0.id == updated.id }) {
+            entries[index] = updated
+        }
+        if selectedEntry?.id == updated.id {
+            selectedEntry = updated
+        }
+    }
+
+    /// Fetches the full article text via Miniflux's scraper. Returns nil on failure
+    /// so callers can fall back to the feed-provided content.
+    func fetchFullContent(for entry: Entry) async -> String? {
+        if let cached = fullContentCache[entry.id] { return cached }
+        guard let client = client else { return nil }
+        do {
+            let content = try await client.fetchOriginalContent(entryId: entry.id)
+            guard !content.isEmpty else { return nil }
+            fullContentCache[entry.id] = content
+            return content
+        } catch {
+            print("Failed to fetch full content for entry \(entry.id): \(error)")
+            return nil
+        }
+    }
+
+    func markAsUnread(_ entry: Entry, reloadEntries: Bool = true) async {
         guard let client = client else { return }
         do {
             try await client.updateEntries(ids: [entry.id], status: "unread")
-            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-                entries[index] = try await client.getEntry(id: entry.id)
+            replaceEntry(try await client.getEntry(id: entry.id))
+            if reloadEntries {
+                await refreshData()
+            } else {
+                await refreshSidebarData()
             }
-            await refreshData()
         } catch {
             errorMessage = "Failed to mark as unread: \(error.localizedDescription)"
         }
@@ -222,12 +250,7 @@ class MainViewModel: ObservableObject {
         guard let client = client else { return }
         do {
             try await client.toggleBookmark(id: entry.id)
-            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-                entries[index] = try await client.getEntry(id: entry.id)
-            }
-            if selectedEntry?.id == entry.id {
-                selectedEntry = entries.first(where: { $0.id == entry.id })
-            }
+            replaceEntry(try await client.getEntry(id: entry.id))
             await refreshData()
         } catch {
             errorMessage = "Failed to toggle star: \(error.localizedDescription)"

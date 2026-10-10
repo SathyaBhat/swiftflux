@@ -4,12 +4,24 @@ All notable changes to SwiftFlux will be documented here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
 ### Added
 - Filter entries by author via a person icon menu in the entry list toolbar
 - Author name and icon displayed on each entry row
 - "Mark all as read" now respects the active author filter (only marks visible entries)
 - "Mark All as Read" context menu item also respects the active author filter
 - Author filter auto-clears when switching feed/filter or when the selected author is no longer present in the current entry list
+- Toolbar button to fetch the full article on demand, and to switch back to the feed content
+- Faster tooltips
+
+### Changed
+- Full-article fetch no longer overwrites the feed content stored on the server
+- Star tooltip now reads "Star" / "Unstar" depending on state
+
+### Fixed
+- Toggling read/star status no longer reloads the entry list or loses the open article
+- Marking an entry as unread now refreshes the sidebar counts
 
 ## [0.4.0] - 2026-06-03
 

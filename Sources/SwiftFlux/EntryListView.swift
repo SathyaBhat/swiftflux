@@ -141,8 +141,10 @@ struct EntryListView: View {
                 selectedAuthor = nil
             }
         }
-        .onChange(of: viewModel.selectedEntry) { oldValue, _ in
-            if oldValue != nil {
+        .onChange(of: viewModel.selectedEntry) { oldValue, newValue in
+            // Only reload when switching articles, not when the selected
+            // entry is refreshed in place (e.g. read/star status changes).
+            if let oldValue, oldValue.id != newValue?.id {
                 Task {
                     await viewModel.loadEntries()
                 }

@@ -22,6 +22,8 @@ struct EntryContentView: View {
     @ObservedObject var viewModel: MainViewModel
     @State private var htmlContent: String = ""
     @State private var isFetchingOriginal = false
+    @State private var showingOriginal = false
+    @State private var loadedEntryId: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -73,7 +75,7 @@ struct EntryContentView: View {
                         Image(systemName: entry.starred ? "star.fill" : "star")
                             .foregroundStyle(entry.starred ? .yellow : .secondary)
                     }
-                    .help("Toggle star")
+                    .help(entry.starred ? "Unstar" : "Star")
 
                     Button(action: {
                         if let url = URL(string: entry.url) {
@@ -83,6 +85,14 @@ struct EntryContentView: View {
                         Image(systemName: "safari")
                     }
                     .help("Open in browser")
+
+                    Button(action: {
+                        Task { await toggleOriginal() }
+                    }) {
+                        Image(systemName: showingOriginal ? "doc.plaintext.fill" : "doc.plaintext")
+                    }
+                    .disabled(isFetchingOriginal)
+                    .help(showingOriginal ? "Show feed content" : "Fetch full article")
 
                     Button(action: {
                         Task { await toggleReadStatus() }
@@ -101,16 +111,27 @@ struct EntryContentView: View {
 
             WebView(htmlString: htmlContent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .topTrailing) {
+                    if isFetchingOriginal {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding()
+                            .help("Fetching full article")
+                    }
+                }
         }
         .task(id: entry.id) {
-            loadContent()
+            await loadContent()
         }
     }
 
-    private func loadContent() {
-        let baseHTML = entry.content ?? "<p>No content available.</p>"
-        let styled = styleHTML(baseHTML)
-        self.htmlContent = styled
+    private func loadContent() async {
+        // Show the feed-provided content. The full article is fetched only on
+        // request, since for link posts (e.g. Daring Fireball) the entry URL
+        // points at the linked site and scraping it would hide the commentary.
+        showingOriginal = false
+        loadedEntryId = entry.id
+        self.htmlContent = styleHTML(feedHTML)
 
         // Auto-mark as read when opened, but keep the entry in the list
         // until another article is selected.
@@ -121,11 +142,30 @@ struct EntryContentView: View {
         }
     }
 
+    private var feedHTML: String {
+        entry.content ?? "<p>No content available.</p>"
+    }
+
+    private func toggleOriginal() async {
+        if showingOriginal {
+            showingOriginal = false
+            htmlContent = styleHTML(feedHTML)
+            return
+        }
+        isFetchingOriginal = true
+        defer { isFetchingOriginal = false }
+        let entryId = entry.id
+        if let fullContent = await viewModel.fetchFullContent(for: entry), loadedEntryId == entryId {
+            showingOriginal = true
+            htmlContent = styleHTML(fullContent)
+        }
+    }
+
     private func toggleReadStatus() async {
         if entry.isUnread {
-            await viewModel.markAsRead(entry)
+            await viewModel.markAsRead(entry, reloadEntries: false)
         } else {
-            await viewModel.markAsUnread(entry)
+            await viewModel.markAsUnread(entry, reloadEntries: false)
         }
     }
 

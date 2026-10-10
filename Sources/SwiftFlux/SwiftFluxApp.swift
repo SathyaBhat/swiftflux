@@ -7,6 +7,8 @@ struct SwiftFluxApp: App {
 
     init() {
         NSApplication.shared.applicationIconImage = NSImage(named: "AppIcon")
+        // Show tooltips faster than the system default (~1s). Value is in milliseconds.
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 250])
     }
 
     var body: some Scene {
